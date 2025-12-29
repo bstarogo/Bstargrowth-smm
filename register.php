@@ -1,43 +1,56 @@
 <?php
+// register.php
 session_start();
 require_once 'config.php';
 
+// Create DB connection
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Handle form submission
-$message = '';
+$error = '';
+$success = '';
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $username = trim($_POST['username']);
     $email = trim($_POST['email']);
     $password = trim($_POST['password']);
-    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+    $confirmPassword = trim($_POST['confirm_password']);
 
-    // Check if email already exists
-    $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $stmt->store_result();
-    
-    if ($stmt->num_rows > 0) {
-        $message = "Email already registered.";
-    } else {
-        // Insert new user
-        $insert = $conn->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
-        $insert->bind_param("sss", $username, $email, $hashed_password);
-        if ($insert->execute()) {
-            $_SESSION['user_id'] = $insert->insert_id;
-            $_SESSION['username'] = $username;
-            header("Location: dashboard.php");
-            exit;
+    if (!empty($username) && !empty($email) && !empty($password) && !empty($confirmPassword)) {
+        if ($password !== $confirmPassword) {
+            $error = "Passwords do not match.";
         } else {
-            $message = "Registration failed. Please try again.";
+            // Check if username or email already exists
+            $stmt = $conn->prepare("SELECT id FROM users WHERE username=? OR email=? LIMIT 1");
+            $stmt->bind_param("ss", $username, $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $error = "Username or email already taken.";
+            } else {
+                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+                $stmt->bind_param("sss", $username, $email, $hashedPassword);
+
+                if ($stmt->execute()) {
+                    $success = "Registration successful! You can now <a href='login.php'>login</a>.";
+                    
+                    // Optional: Send Telegram notification to admin or resellers
+                    // Example:
+                    // sendTelegramNotification($username, $email);
+
+                } else {
+                    $error = "Registration failed. Please try again.";
+                }
+            }
+            $stmt->close();
         }
-        $insert->close();
+    } else {
+        $error = "Please fill in all fields.";
     }
-    $stmt->close();
 }
 
 $conn->close();
@@ -47,35 +60,30 @@ $conn->close();
 <html>
 <head>
     <title>Register - BStarGrowth</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        form { max-width: 400px; margin: auto; }
-        input[type=text], input[type=email], input[type=password] {
-            width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box;
-        }
-        input[type=submit] {
-            padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer;
-        }
-        input[type=submit]:hover { background-color: #0056b3; }
-        .message { color: red; }
-    </style>
 </head>
 <body>
     <h1>Register</h1>
-    <?php if ($message) echo "<p class='message'>" . htmlspecialchars($message) . "</p>"; ?>
-    <form method="post" action="">
-        <label>Username</label>
-        <input type="text" name="username" required>
-        
-        <label>Email</label>
-        <input type="email" name="email" required>
-        
-        <label>Password</label>
-        <input type="password" name="password" required>
-        
-        <input type="submit" value="Register">
+
+    <?php if ($error): ?>
+        <p style="color:red;"><?php echo htmlspecialchars($error); ?></p>
+    <?php elseif ($success): ?>
+        <p style="color:green;"><?php echo $success; ?></p>
+    <?php endif; ?>
+
+    <form method="POST" action="">
+        <label>Username:</label><br>
+        <input type="text" name="username" required><br><br>
+
+        <label>Email:</label><br>
+        <input type="email" name="email" required><br><br>
+
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+
+        <label>Confirm Password:</label><br>
+        <input type="password" name="confirm_password" required><br><br>
+
+        <button type="submit">Register</button>
     </form>
-    <p>Already have an account? <a href="login.php">Login here</a></p>
 </body>
 </html>
