@@ -7,59 +7,39 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Fetch all services
-$sql = "SELECT s.id, s.name, s.description, s.price_per_unit, s.currency, c.rate_to_ngn
-        FROM services s
-        LEFT JOIN currencies c ON s.currency = c.code
-        ORDER BY s.id ASC";
+// Fetch services
+$sql = "SELECT id, name, description, price_per_unit, currency FROM services ORDER BY id ASC";
 $result = $conn->query($sql);
-
-$services = [];
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        // Calculate price in NGN if currency rate exists
-        $price_ngn = $row['rate_to_ngn'] ? $row['price_per_unit'] * $row['rate_to_ngn'] : $row['price_per_unit'];
-        $services[] = [
-            'id' => $row['id'],
-            'name' => htmlspecialchars($row['name']),
-            'description' => htmlspecialchars($row['description']),
-            'price' => $row['price_per_unit'],
-            'currency' => $row['currency'],
-            'price_ngn' => number_format($price_ngn, 2)
-        ];
-    }
-}
-$conn->close();
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <title>Services - BStarGrowth</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
+        body { font-family: Arial, sans-serif; padding: 20px; }
         h1 { color: #333; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #f9f9f9; margin-bottom: 10px; padding: 10px; border-radius: 5px; }
-        strong { font-size: 1.1em; }
+        ul { list-style: none; padding: 0; }
+        li { border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        strong { font-size: 18px; }
     </style>
 </head>
 <body>
     <h1>Available Services</h1>
-    <?php if (!empty($services)): ?>
+    <?php if ($result->num_rows > 0): ?>
         <ul>
-            <?php foreach($services as $service): ?>
-                <li>
-                    <strong><?php echo $service['name']; ?></strong><br>
-                    <?php echo $service['description']; ?><br>
-                    Price: <?php echo $service['price'] . ' ' . $service['currency']; ?>
-                    <?php if ($service['currency'] != 'NGN'): ?>
-                        (≈ <?php echo $service['price_ngn']; ?> NGN)
-                    <?php endif; ?>
-                </li>
-            <?php endforeach; ?>
+        <?php while($row = $result->fetch_assoc()): ?>
+            <li>
+                <strong><?php echo htmlspecialchars($row['name']); ?></strong><br>
+                <?php echo nl2br(htmlspecialchars($row['description'])); ?><br>
+                <em>Price:</em> <?php echo number_format($row['price_per_unit'], 2) . ' ' . htmlspecialchars($row['currency']); ?>
+            </li>
+        <?php endwhile; ?>
         </ul>
     <?php else: ?>
         <p>No services available at the moment.</p>
     <?php endif; ?>
 </body>
 </html>
+<?php
+$conn->close();
+?>
