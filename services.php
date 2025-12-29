@@ -1,44 +1,37 @@
 <?php
 // services.php
-session_start();
 require_once 'config.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
+// Fetch services from database
+$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
 }
 
-// Fetch services
-$services = [];
-$result = $conn->query("SELECT id, name, description, price_per_unit, currency FROM services ORDER BY id ASC");
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $services[] = $row;
-    }
-}
+$sql = "SELECT id, name, description, price_per_unit, currency FROM services ORDER BY id ASC";
+$result = $conn->query($sql);
+
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BStarGrowth - Services</title>
+    <title>Services - BStarGrowth</title>
 </head>
 <body>
-    <h2>Available Services</h2>
-    <ul>
-        <?php if (!empty($services)) : ?>
-            <?php foreach ($services as $service) : ?>
+    <h1>Available Services</h1>
+    <?php if ($result->num_rows > 0): ?>
+        <ul>
+            <?php while($row = $result->fetch_assoc()): ?>
                 <li>
-                    <strong><?php echo htmlspecialchars($service['name']); ?></strong><br>
-                    Description: <?php echo htmlspecialchars($service['description']); ?><br>
-                    Price: <?php echo number_format($service['price_per_unit'], 2) . ' ' . htmlspecialchars($service['currency']); ?><br>
+                    <strong><?php echo htmlspecialchars($row['name']); ?></strong><br>
+                    <?php echo htmlspecialchars($row['description']); ?><br>
+                    Price: <?php echo $row['price_per_unit'] . ' ' . $row['currency']; ?>
                 </li>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <li>No services available at the moment.</li>
-        <?php endif; ?>
-    </ul>
-    <a href="dashboard.php">Back to Dashboard</a>
+            <?php endwhile; ?>
+        </ul>
+    <?php else: ?>
+        <p>No services available at the moment.</p>
+    <?php endif; ?>
 </body>
 </html>
+<?php $conn->close(); ?>
