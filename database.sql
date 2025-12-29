@@ -1,5 +1,5 @@
 -- SQL Database for Bstargrowth SMM Panel
--- Schema only
+-- Complete structure
 
 -- Admins table
 CREATE TABLE IF NOT EXISTS admins (
