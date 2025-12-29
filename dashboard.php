@@ -1,82 +1,87 @@
 <?php
-session_start();
 require_once 'config.php';
+
+// Start session
+session_start();
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
-    exit;
+    exit();
 }
 
+// Connect to database
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Fetch user info
+// Get user info
+$user_id = $_SESSION['user_id'];
 $stmt = $conn->prepare("SELECT username, email, wallet_balance FROM users WHERE id = ?");
-$stmt->bind_param("i", $_SESSION['user_id']);
+$stmt->bind_param("i", $user_id);
 $stmt->execute();
-$stmt->bind_result($username, $email, $wallet_balance);
-$stmt->fetch();
-$stmt->close();
+$user = $stmt->get_result()->fetch_assoc();
 
-// Fetch user's orders
-$stmt = $conn->prepare("SELECT o.id, s.name, o.quantity, o.price, o.status FROM orders o JOIN services s ON o.service_id = s.id WHERE o.user_id = ? ORDER BY o.created_at DESC");
-$stmt->bind_param("i", $_SESSION['user_id']);
-$stmt->execute();
-$result = $stmt->get_result();
+// Get recent orders
+$stmt_orders = $conn->prepare("
+    SELECT o.id, s.name as service_name, o.link, o.quantity, o.price, o.currency, o.status, o.created_at 
+    FROM orders o 
+    JOIN services s ON o.service_id = s.id 
+    WHERE o.user_id = ? 
+    ORDER BY o.created_at DESC 
+    LIMIT 5
+");
+$stmt_orders->bind_param("i", $user_id);
+$stmt_orders->execute();
+$orders = $stmt_orders->get_result();
 
-$orders = [];
-while ($row = $result->fetch_assoc()) {
-    $orders[] = $row;
-}
+// Get available services
+$services_result = $conn->query("SELECT id, name, price_per_unit, currency FROM services ORDER BY id ASC");
 
-$conn->close();
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
     <title>Dashboard - BStarGrowth</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
-        th { background-color: #f2f2f2; }
-        a.logout { color: red; float: right; }
-    </style>
 </head>
 <body>
-    <h1>Welcome, <?php echo htmlspecialchars($username); ?> <a href="logout.php" class="logout">Logout</a></h1>
-    <p>Email: <?php echo htmlspecialchars($email); ?></p>
-    <p>Wallet Balance: <?php echo number_format($wallet_balance, 2); ?> NGN</p>
+    <h1>Welcome, <?php echo htmlspecialchars($user['username']); ?>!</h1>
+    <p>Email: <?php echo htmlspecialchars($user['email']); ?></p>
+    <p>Wallet Balance: <?php echo number_format($user['wallet_balance'], 2); ?> NGN</p>
 
-    <h2>Your Orders</h2>
-    <?php if (count($orders) > 0): ?>
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Service</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Status</th>
-            </tr>
-            <?php foreach ($orders as $order): ?>
-                <tr>
-                    <td><?php echo $order['id']; ?></td>
-                    <td><?php echo htmlspecialchars($order['name']); ?></td>
-                    <td><?php echo $order['quantity']; ?></td>
-                    <td><?php echo $order['price'] . ' NGN'; ?></td>
-                    <td><?php echo ucfirst($order['status']); ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
+    <h2>Recent Orders</h2>
+    <?php if ($orders->num_rows > 0): ?>
+        <ul>
+        <?php while($row = $orders->fetch_assoc()): ?>
+            <li>
+                Order #<?php echo $row['id']; ?>: <?php echo htmlspecialchars($row['service_name']); ?><br>
+                Link: <?php echo htmlspecialchars($row['link']); ?><br>
+                Quantity: <?php echo $row['quantity']; ?> | Price: <?php echo $row['price'] . ' ' . $row['currency']; ?><br>
+                Status: <?php echo ucfirst($row['status']); ?> | Created: <?php echo $row['created_at']; ?>
+            </li>
+        <?php endwhile; ?>
+        </ul>
     <?php else: ?>
-        <p>You have no orders yet.</p>
+        <p>No recent orders.</p>
     <?php endif; ?>
 
-    <p><a href="services.php">Order a Service</a></p>
+    <h2>Available Services</h2>
+    <?php if ($services_result->num_rows > 0): ?>
+        <ul>
+        <?php while($service = $services_result->fetch_assoc()): ?>
+            <li>
+                <?php echo htmlspecialchars($service['name']); ?> - <?php echo $service['price_per_unit'] . ' ' . $service['currency']; ?>
+            </li>
+        <?php endwhile; ?>
+        </ul>
+    <?php else: ?>
+        <p>No services available at the moment.</p>
+    <?php endif; ?>
+
+    <p><a href="logout.php">Logout</a></p>
 </body>
 </html>
+<?php
+$conn->close();
+?>
