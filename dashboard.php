@@ -1,5 +1,4 @@
 <?php
-// dashboard.php
 session_start();
 require_once 'config.php';
 
@@ -9,60 +8,86 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Connect to database
+// Connect to DB
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Get user info
+// Fetch user info
 $stmt = $conn->prepare("SELECT username, email, wallet_balance FROM users WHERE id = ?");
 $stmt->bind_param("i", $_SESSION['user_id']);
 $stmt->execute();
-$result = $stmt->get_result();
-$user = $result->fetch_assoc();
+$stmt->bind_result($username, $email, $wallet_balance);
+$stmt->fetch();
+$stmt->close();
 
-// Get all services
-$services_res = $conn->query("SELECT id, name, description, price_per_unit, currency FROM services ORDER BY id ASC");
+// Fetch user orders
+$order_sql = "SELECT o.id, s.name AS service_name, o.link, o.quantity, o.price, o.currency, o.status, o.created_at
+              FROM orders o
+              JOIN services s ON o.service_id = s.id
+              WHERE o.user_id = ?
+              ORDER BY o.created_at DESC";
+$order_stmt = $conn->prepare($order_sql);
+$order_stmt->bind_param("i", $_SESSION['user_id']);
+$order_stmt->execute();
+$order_result = $order_stmt->get_result();
 
-// Get all currencies for conversion
-$currencies_res = $conn->query("SELECT code, rate_to_ngn FROM currencies");
-$currencies = [];
-while ($row = $currencies_res->fetch_assoc()) {
-    $currencies[$row['code']] = $row['rate_to_ngn'];
+$orders = [];
+while ($row = $order_result->fetch_assoc()) {
+    $orders[] = $row;
 }
 
 $conn->close();
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
     <title>Dashboard - BStarGrowth</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
-    <h1>Welcome, <?php echo htmlspecialchars($user['username']); ?>!</h1>
-    <p>Email: <?php echo htmlspecialchars($user['email']); ?></p>
-    <p>Wallet Balance: <?php echo number_format($user['wallet_balance'], 2); ?> NGN</p>
+    <h1>Welcome, <?php echo htmlspecialchars($username); ?></h1>
+    <p>Email: <?php echo htmlspecialchars($email); ?></p>
+    <p>Wallet Balance: <?php echo number_format($wallet_balance,2); ?> NGN</p>
+    <p><a href="services.php">View Services</a> | <a href="logout.php">Logout</a></p>
 
-    <h2>Available Services</h2>
-    <?php if ($services_res->num_rows > 0): ?>
-        <ul>
-            <?php while($service = $services_res->fetch_assoc()): ?>
-                <li>
-                    <strong><?php echo htmlspecialchars($service['name']); ?></strong><br>
-                    <?php echo htmlspecialchars($service['description']); ?><br>
-                    Price: <?php echo number_format($service['price_per_unit'], 2) . ' ' . htmlspecialchars($service['currency']); ?>
-                    <?php if ($service['currency'] != 'NGN' && isset($currencies[$service['currency']])): ?>
-                        (≈ <?php echo number_format($service['price_per_unit'] * $currencies[$service['currency']], 2); ?> NGN)
-                    <?php endif; ?>
-                </li>
-            <?php endwhile; ?>
-        </ul>
+    <h2>Your Orders</h2>
+    <?php if (!empty($orders)): ?>
+        <table>
+            <tr>
+                <th>Order ID</th>
+                <th>Service</th>
+                <th>Link</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Currency</th>
+                <th>Status</th>
+                <th>Created At</th>
+            </tr>
+            <?php foreach ($orders as $order): ?>
+                <tr>
+                    <td><?php echo $order['id']; ?></td>
+                    <td><?php echo htmlspecialchars($order['service_name']); ?></td>
+                    <td><?php echo htmlspecialchars($order['link']); ?></td>
+                    <td><?php echo $order['quantity']; ?></td>
+                    <td><?php echo $order['price']; ?></td>
+                    <td><?php echo $order['currency']; ?></td>
+                    <td><?php echo ucfirst($order['status']); ?></td>
+                    <td><?php echo $order['created_at']; ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
     <?php else: ?>
-        <p>No services available at the moment.</p>
+        <p>You have no orders yet.</p>
     <?php endif; ?>
-
-    <p><a href="logout.php">Logout</a></p>
 </body>
 </html>
