@@ -1,38 +1,61 @@
 <?php
-// telegram_webhook.php
-require_once 'config.php';
+// telegram_webhook.php — Final version
 
-// Get the incoming update from Telegram
+// Include config
+include_once('config.php');
+
+// Read incoming Telegram updates
 $content = file_get_contents("php://input");
 $update = json_decode($content, true);
 
-if(!$update) {
-    exit;
-}
+// Extract message
+$message = $update['message'] ?? null;
+$chat_id = $message['chat']['id'] ?? '';
+$text = trim($message['text'] ?? '');
+$username = $message['from']['username'] ?? '';
+$first_name = $message['from']['first_name'] ?? '';
 
-// Extract chat ID and message
-$chat_id = $update['message']['chat']['id'] ?? null;
-$message = $update['message']['text'] ?? '';
-
-// Simple auto-reply example
-if($chat_id && $message) {
-    $reply = "Hello! Welcome to BStarGrowth. Send /reseller to start your reseller training.";
-    
-    // Use your bot token from config.php (replace DEMO_TOKEN with actual token)
-    $bot_token = BOT_TOKEN;
-    $url = "https://api.telegram.org/bot$bot_token/sendMessage";
-    
-    $post_fields = [
+// Function to send Telegram messages
+function sendMessage($chat_id, $text) {
+    global $telegram_bot_token;
+    $url = "https://api.telegram.org/bot{$telegram_bot_token}/sendMessage";
+    $data = [
         'chat_id' => $chat_id,
-        'text' => $reply
+        'text' => $text,
+        'parse_mode' => 'HTML'
     ];
-    
-    // Send response to Telegram
-    $ch = curl_init(); 
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    $output = curl_exec($ch);
-    curl_close($ch);
+    file_get_contents($url . '?' . http_build_query($data));
 }
+
+// Demo bot token from config
+$telegram_bot_token = TELEGRAM_BOT_TOKEN; // Replace in config with real token
+
+// Example: simple keyword auto-reply
+$keywords = [
+    'reseller' => "Hello! 👋\n\nAs a reseller, you can:\n1. Fund your wallet\n2. Place orders\n3. Check order history\n4. Get support\n\nType 'help' anytime for guidance.",
+    'help' => "Here’s what you can do:\n- Fund wallet: type 'fund'\n- Check balance: type 'balance'\n- Place order: type 'order'\n- View services: type 'services'\n- Get support: type 'support'",
+    'fund' => "To fund your account, visit your dashboard or follow the instructions in your panel. Your funds will stay in your wallet until you spend them.",
+    'balance' => "Your wallet balance is automatically updated after every transaction.",
+    'order' => "To place an order, type 'order' followed by the service and quantity, or use the panel dashboard for easy order placement.",
+    'services' => "You can view all available services in your dashboard or type 'services' here to see them listed.",
+    'support' => "Need help? Contact support via your dashboard or email: support@bstargrowth.com.ng"
+];
+
+// Default reply
+$default_reply = "Hi {$first_name}! 👋\n\nI'm your BStarGrowth assistant. Type 'help' to see available commands.";
+
+// Process message
+if($text) {
+    $matched = false;
+    foreach($keywords as $key => $reply) {
+        if(stripos($text, $key) !== false) {
+            sendMessage($chat_id, $reply);
+            $matched = true;
+            break;
+        }
+    }
+    if(!$matched) {
+        sendMessage($chat_id, $default_reply);
+    }
+}
+?>
