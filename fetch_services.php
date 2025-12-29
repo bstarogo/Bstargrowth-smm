@@ -1,40 +1,23 @@
 <?php
 require_once 'config.php';
 
-// Connect to database
+// Connect to DB
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) {
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Database connection failed: ' . $conn->connect_error
-    ]);
-    exit;
+    die(json_encode(["error" => "Database connection failed"]));
 }
 
 // Fetch all services
-$sql = "SELECT id, name, description, price_per_unit, currency FROM services ORDER BY id ASC";
-$result = $conn->query($sql);
+$stmt = $conn->prepare("SELECT id, name, price_per_unit, currency FROM services ORDER BY id ASC");
+$stmt->execute();
+$result = $stmt->get_result();
 
 $services = [];
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $services[] = [
-            'id' => $row['id'],
-            'name' => $row['name'],
-            'description' => $row['description'],
-            'price_per_unit' => (float)$row['price_per_unit'],
-            'currency' => $row['currency']
-        ];
-    }
+while ($row = $result->fetch_assoc()) {
+    $services[] = $row;
 }
 
-// Return JSON response
 header('Content-Type: application/json');
-echo json_encode([
-    'status' => 'success',
-    'data' => $services
-]);
-
+echo json_encode($services);
 $conn->close();
 ?>
